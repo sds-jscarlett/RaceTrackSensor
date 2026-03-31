@@ -198,6 +198,7 @@ Dashboard features:
 - Auto-refreshes every 500 ms.
 - Shows current race state (`ready`, `running`, `complete`).
 - Displays ordered finish results and microsecond deltas from the leader.
+- Highlights the winner row with a flashing visual style for quick readability.
 - Includes a **Reset Race** button (web-triggered).
 
 You can change SSID/password in:
