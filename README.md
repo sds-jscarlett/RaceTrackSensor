@@ -22,6 +22,10 @@ When the first car crosses the finish line, the code identifies the winning lane
   Standalone stepper + ULN2003 test sketch for ESP32-S3 WROOM.
 - `Sample test for modules/ESP-C3-12F-Kit/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`  
   Standalone stepper + ULN2003 test sketch for ESP-C3-12F-Kit.
+- `Sample test for modules/ESP32-S3-WROOM/Web_Dashboard_Sim_Test/Web_Dashboard_Sim_Test.ino`  
+  Dashboard simulation sketch for ESP32-S3 (new simulated results every 10 seconds).
+- `Sample test for modules/ESP-C3-12F-Kit/Web_Dashboard_Sim_Test/Web_Dashboard_Sim_Test.ino`  
+  Dashboard simulation sketch for ESP-C3 (new simulated results every 10 seconds).
 
 ---
 
@@ -248,6 +252,16 @@ Open and upload one of:
 Expected behavior:
 - Motor sweeps clockwise/counterclockwise continuously.
 - Serial monitor prints new target positions.
+
+### 9.3 Web dashboard simulation test
+Open and upload one of:
+- `Sample test for modules/ESP32-S3-WROOM/Web_Dashboard_Sim_Test/Web_Dashboard_Sim_Test.ino`
+- `Sample test for modules/ESP-C3-12F-Kit/Web_Dashboard_Sim_Test/Web_Dashboard_Sim_Test.ino`
+
+Expected behavior:
+- Board creates a Wi-Fi AP and prints dashboard URL in Serial Monitor.
+- Browser dashboard auto-refreshes every 500 ms.
+- Simulated race results rotate automatically every 10 seconds.
 
 ---
 
