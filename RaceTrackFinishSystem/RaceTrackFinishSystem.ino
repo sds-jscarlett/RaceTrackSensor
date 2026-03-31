@@ -4,8 +4,11 @@
 
   Features:
   - Reads 3 IR break-beam receivers to detect finish-line crossing.
+  - Uses GPIO interrupts + microsecond timestamps for near-tie accuracy.
   - Stores finish order (1st, 2nd, 3rd).
   - Starts winner flag animation on the lane that finished first.
+  - Optional physical reset button.
+  - Wi-Fi dashboard with live auto-refresh race status.
   - Uses one 28BYJ-48 stepper + ULN2003 driver per lane (3 total).
 
   Notes:
@@ -16,12 +19,22 @@
 */
 
 #include <AccelStepper.h>
+#include <WiFi.h>
+#include <WebServer.h>
 
 // ------------------------- User Configuration -------------------------
 static const uint8_t LANE_COUNT = 3;
 
 // IR receiver pins (digital input): Lane 1..3
 const uint8_t IR_PINS[LANE_COUNT] = {4, 5, 6};
+
+// Optional reset button (to GND), INPUT_PULLUP enabled.
+const uint8_t RESET_BUTTON_PIN = 7;
+const unsigned long RESET_BUTTON_DEBOUNCE_MS = 40;
+
+// Wi-Fi access point config for local dashboard.
+const char* DASHBOARD_AP_SSID = "RaceTrackSensor";
+const char* DASHBOARD_AP_PASS = "racetrack123"; // min 8 chars
 
 // ULN2003 IN1..IN4 pins for each lane's stepper
 // Lane 1 stepper pins
@@ -49,8 +62,8 @@ const long FLAG_WAVE_AMPLITUDE_STEPS = 450; // adjust mechanically
 const float FLAG_MAX_SPEED = 850.0;         // steps/s
 const float FLAG_ACCEL = 600.0;             // steps/s^2
 
-// Debounce/lockout for each lane trigger (ms)
-const unsigned long TRIGGER_LOCKOUT_MS = 300;
+// Debounce/lockout for each lane trigger (microseconds)
+const uint32_t TRIGGER_LOCKOUT_US = 300000;
 
 // Optional: automatically reset race after this timeout once all finished (ms)
 const unsigned long AUTO_RESET_DELAY_MS = 12000;
@@ -63,7 +76,7 @@ AccelStepper stepperLane3(AccelStepper::HALF4WIRE, L3_IN1, L3_IN3, L3_IN2, L3_IN
 AccelStepper* steppers[LANE_COUNT] = {&stepperLane1, &stepperLane2, &stepperLane3};
 
 bool laneFinished[LANE_COUNT] = {false, false, false};
-unsigned long laneLastTriggerMs[LANE_COUNT] = {0, 0, 0};
+uint32_t laneFinishTimestampUs[LANE_COUNT] = {0, 0, 0};
 
 uint8_t finishOrder[LANE_COUNT] = {255, 255, 255}; // holds lane index in order
 uint8_t finishCount = 0;
@@ -71,6 +84,42 @@ int winnerLane = -1;
 
 bool raceLocked = false;
 unsigned long raceCompleteTimeMs = 0;
+
+volatile bool laneTriggered[LANE_COUNT] = {false, false, false};
+volatile uint32_t laneTriggerUs[LANE_COUNT] = {0, 0, 0};
+volatile uint32_t laneLastIsrUs[LANE_COUNT] = {0, 0, 0};
+
+WebServer server(80);
+
+bool lastResetButtonState = HIGH;
+unsigned long lastResetButtonChangeMs = 0;
+
+void IRAM_ATTR onLane1Interrupt() {
+  uint32_t nowUs = micros();
+  if ((uint32_t)(nowUs - laneLastIsrUs[0]) > TRIGGER_LOCKOUT_US) {
+    laneLastIsrUs[0] = nowUs;
+    laneTriggerUs[0] = nowUs;
+    laneTriggered[0] = true;
+  }
+}
+
+void IRAM_ATTR onLane2Interrupt() {
+  uint32_t nowUs = micros();
+  if ((uint32_t)(nowUs - laneLastIsrUs[1]) > TRIGGER_LOCKOUT_US) {
+    laneLastIsrUs[1] = nowUs;
+    laneTriggerUs[1] = nowUs;
+    laneTriggered[1] = true;
+  }
+}
+
+void IRAM_ATTR onLane3Interrupt() {
+  uint32_t nowUs = micros();
+  if ((uint32_t)(nowUs - laneLastIsrUs[2]) > TRIGGER_LOCKOUT_US) {
+    laneLastIsrUs[2] = nowUs;
+    laneTriggerUs[2] = nowUs;
+    laneTriggered[2] = true;
+  }
+}
 
 void setupSteppers() {
   for (uint8_t i = 0; i < LANE_COUNT; i++) {
@@ -82,9 +131,17 @@ void setupSteppers() {
 }
 
 void resetRace() {
+  noInterrupts();
+  for (uint8_t i = 0; i < LANE_COUNT; i++) {
+    laneTriggered[i] = false;
+    laneTriggerUs[i] = 0;
+    laneLastIsrUs[i] = 0;
+  }
+  interrupts();
+
   for (uint8_t i = 0; i < LANE_COUNT; i++) {
     laneFinished[i] = false;
-    laneLastTriggerMs[i] = 0;
+    laneFinishTimestampUs[i] = 0;
     finishOrder[i] = 255;
   }
 
@@ -104,23 +161,44 @@ void resetRace() {
 void announceResults() {
   Serial.println("\n--- Race Results ---");
   for (uint8_t place = 0; place < finishCount; place++) {
+    uint8_t lane = finishOrder[place];
+    uint32_t laneUs = laneFinishTimestampUs[lane];
+
     Serial.print(place + 1);
     Serial.print(place == 0 ? "st" : (place == 1 ? "nd" : "rd"));
     Serial.print(": Lane ");
-    Serial.println(finishOrder[place] + 1);
+    Serial.print(lane + 1);
+
+    if (place == 0) {
+      Serial.print(" (+0 us)");
+    } else {
+      uint8_t firstLane = finishOrder[0];
+      uint32_t deltaUs = laneUs - laneFinishTimestampUs[firstLane];
+      Serial.print(" (+");
+      Serial.print(deltaUs);
+      Serial.print(" us)");
+    }
+
+    Serial.println();
   }
   Serial.println("--------------------");
 }
 
-void recordFinish(uint8_t lane) {
+void recordFinish(uint8_t lane, uint32_t timestampUs) {
+  if (raceLocked || laneFinished[lane]) return;
+
   laneFinished[lane] = true;
+  laneFinishTimestampUs[lane] = timestampUs;
   finishOrder[finishCount] = lane;
   finishCount++;
 
   Serial.print("Lane ");
   Serial.print(lane + 1);
   Serial.print(" finished at place ");
-  Serial.println(finishCount);
+  Serial.print(finishCount);
+  Serial.print(" (timestamp: ");
+  Serial.print(timestampUs);
+  Serial.println(" us)");
 
   if (finishCount == 1) {
     winnerLane = lane;
@@ -139,23 +217,49 @@ void recordFinish(uint8_t lane) {
   }
 }
 
-void checkFinishSensors() {
+void processLaneTriggers() {
   if (raceLocked) return;
 
-  unsigned long now = millis();
+  bool pending[LANE_COUNT] = {false, false, false};
+  uint32_t triggerUs[LANE_COUNT] = {0, 0, 0};
+
+  noInterrupts();
+  for (uint8_t lane = 0; lane < LANE_COUNT; lane++) {
+    pending[lane] = laneTriggered[lane];
+    triggerUs[lane] = laneTriggerUs[lane];
+    laneTriggered[lane] = false;
+  }
+  interrupts();
+
+  uint8_t lanesToRecord[LANE_COUNT];
+  uint32_t timesToRecord[LANE_COUNT];
+  uint8_t pendingCount = 0;
 
   for (uint8_t lane = 0; lane < LANE_COUNT; lane++) {
-    if (laneFinished[lane]) continue;
+    if (pending[lane] && !laneFinished[lane]) {
+      lanesToRecord[pendingCount] = lane;
+      timesToRecord[pendingCount] = triggerUs[lane];
+      pendingCount++;
+    }
+  }
 
-    int sensorState = digitalRead(IR_PINS[lane]);
-    bool beamBroken = (sensorState == LOW); // active-LOW convention
+  // Sort pending finishes by trigger timestamp (ascending).
+  for (uint8_t i = 0; i < pendingCount; i++) {
+    for (uint8_t j = i + 1; j < pendingCount; j++) {
+      if (timesToRecord[j] < timesToRecord[i]) {
+        uint32_t tmpTs = timesToRecord[i];
+        timesToRecord[i] = timesToRecord[j];
+        timesToRecord[j] = tmpTs;
 
-    if (beamBroken) {
-      if (now - laneLastTriggerMs[lane] > TRIGGER_LOCKOUT_MS) {
-        laneLastTriggerMs[lane] = now;
-        recordFinish(lane);
+        uint8_t tmpLane = lanesToRecord[i];
+        lanesToRecord[i] = lanesToRecord[j];
+        lanesToRecord[j] = tmpLane;
       }
     }
+  }
+
+  for (uint8_t i = 0; i < pendingCount; i++) {
+    recordFinish(lanesToRecord[i], timesToRecord[i]);
   }
 }
 
@@ -179,6 +283,106 @@ void updateWinnerFlagAnimation() {
   }
 }
 
+String raceStateString() {
+  if (raceLocked) return "complete";
+  if (finishCount > 0) return "running";
+  return "ready";
+}
+
+void handleRoot() {
+  String html =
+      "<!doctype html><html><head><meta charset='utf-8'>"
+      "<meta name='viewport' content='width=device-width,initial-scale=1'>"
+      "<title>Race Dashboard</title>"
+      "<style>body{font-family:Arial,sans-serif;margin:24px;}"
+      ".card{max-width:560px;padding:16px;border:1px solid #ccc;border-radius:8px;}"
+      "button{padding:8px 12px;font-size:14px;}</style></head><body>"
+      "<div class='card'><h2>RaceTrackSensor Live Results</h2>"
+      "<p><strong>State:</strong> <span id='state'>...</span></p>"
+      "<ol id='results'><li>Waiting for finishes...</li></ol>"
+      "<button onclick='resetRace()'>Reset Race</button>"
+      "</div>"
+      "<script>"
+      "async function refresh(){"
+      "const res=await fetch('/api/results');"
+      "const data=await res.json();"
+      "document.getElementById('state').textContent=data.state;"
+      "const list=document.getElementById('results');"
+      "list.innerHTML='';"
+      "if(data.results.length===0){list.innerHTML='<li>Waiting for finishes...</li>';return;}"
+      "for(const row of data.results){"
+      "const li=document.createElement('li');"
+      "li.textContent=`${row.place}: Lane ${row.lane} (${row.delta_us} us behind leader)`;"
+      "if(row.place===1){li.textContent=`1: Lane ${row.lane} (leader)`;}"
+      "list.appendChild(li);"
+      "}"
+      "}"
+      "async function resetRace(){await fetch('/api/reset',{method:'POST'});setTimeout(refresh,100);}"
+      "refresh();setInterval(refresh,500);"
+      "</script></body></html>";
+
+  server.send(200, "text/html", html);
+}
+
+void handleApiResults() {
+  String json = "{\"state\":\"" + raceStateString() + "\",\"results\":[";
+
+  for (uint8_t place = 0; place < finishCount; place++) {
+    uint8_t lane = finishOrder[place];
+    uint32_t deltaUs = 0;
+    if (place > 0) {
+      uint8_t leaderLane = finishOrder[0];
+      deltaUs = laneFinishTimestampUs[lane] - laneFinishTimestampUs[leaderLane];
+    }
+
+    if (place > 0) json += ",";
+    json += "{\"place\":" + String(place + 1) + ",\"lane\":" + String(lane + 1) + ",\"delta_us\":" + String(deltaUs) + "}";
+  }
+
+  json += "]}";
+  server.send(200, "application/json", json);
+}
+
+void handleApiReset() {
+  resetRace();
+  server.send(200, "application/json", "{\"ok\":true}");
+}
+
+void setupDashboard() {
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(DASHBOARD_AP_SSID, DASHBOARD_AP_PASS);
+
+  IPAddress ip = WiFi.softAPIP();
+  Serial.print("Dashboard AP started: ");
+  Serial.println(DASHBOARD_AP_SSID);
+  Serial.print("Dashboard URL: http://");
+  Serial.println(ip);
+
+  server.on("/", HTTP_GET, handleRoot);
+  server.on("/api/results", HTTP_GET, handleApiResults);
+  server.on("/api/reset", HTTP_POST, handleApiReset);
+  server.begin();
+}
+
+void checkResetButton() {
+  bool current = digitalRead(RESET_BUTTON_PIN);
+  unsigned long now = millis();
+
+  if (current != lastResetButtonState) {
+    lastResetButtonChangeMs = now;
+    lastResetButtonState = current;
+  }
+
+  if (current == LOW && (now - lastResetButtonChangeMs) > RESET_BUTTON_DEBOUNCE_MS) {
+    resetRace();
+    while (digitalRead(RESET_BUTTON_PIN) == LOW) {
+      delay(1);
+    }
+    lastResetButtonState = HIGH;
+    lastResetButtonChangeMs = millis();
+  }
+}
+
 void setup() {
   Serial.begin(115200);
   delay(500);
@@ -189,15 +393,24 @@ void setup() {
     pinMode(IR_PINS[i], INPUT_PULLUP);
   }
 
+  pinMode(RESET_BUTTON_PIN, INPUT_PULLUP);
+
+  attachInterrupt(digitalPinToInterrupt(IR_PINS[0]), onLane1Interrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(IR_PINS[1]), onLane2Interrupt, FALLING);
+  attachInterrupt(digitalPinToInterrupt(IR_PINS[2]), onLane3Interrupt, FALLING);
+
   setupSteppers();
   resetRace();
+  setupDashboard();
 
   Serial.println("Break beam on each lane to register finish order.");
 }
 
 void loop() {
-  checkFinishSensors();
+  processLaneTriggers();
+  checkResetButton();
   updateWinnerFlagAnimation();
+  server.handleClient();
 
   // Auto-reset after all 3 lanes finish and timeout expires.
   if (raceLocked && (millis() - raceCompleteTimeMs > AUTO_RESET_DELAY_MS)) {
