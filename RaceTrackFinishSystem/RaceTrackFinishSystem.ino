@@ -166,17 +166,18 @@ void announceResults() {
 
     Serial.print(place + 1);
     Serial.print(place == 0 ? "st" : (place == 1 ? "nd" : "rd"));
-    Serial.print(": Lane ");
-    Serial.print(lane + 1);
+    Serial.print(": Track ");
+    Serial.print((char)('A' + lane));
 
     if (place == 0) {
-      Serial.print(" (+0 us)");
+      Serial.print(" (+0.000 ms)");
     } else {
       uint8_t firstLane = finishOrder[0];
       uint32_t deltaUs = laneUs - laneFinishTimestampUs[firstLane];
+      float deltaMs = deltaUs / 1000.0f;
       Serial.print(" (+");
-      Serial.print(deltaUs);
-      Serial.print(" us)");
+      Serial.print(deltaMs, 3);
+      Serial.print(" ms)");
     }
 
     Serial.println();
@@ -192,18 +193,18 @@ void recordFinish(uint8_t lane, uint32_t timestampUs) {
   finishOrder[finishCount] = lane;
   finishCount++;
 
-  Serial.print("Lane ");
-  Serial.print(lane + 1);
+  Serial.print("Track ");
+  Serial.print((char)('A' + lane));
   Serial.print(" finished at place ");
   Serial.print(finishCount);
   Serial.print(" (timestamp: ");
-  Serial.print(timestampUs);
-  Serial.println(" us)");
+  Serial.print(timestampUs / 1000.0f, 3);
+  Serial.println(" ms)");
 
   if (finishCount == 1) {
     winnerLane = lane;
-    Serial.print("Winner detected: Lane ");
-    Serial.println(winnerLane + 1);
+    Serial.print("Winner detected: Track ");
+    Serial.println((char)('A' + winnerLane));
 
     // Start winner flag wave from center to one side.
     steppers[winnerLane]->moveTo(FLAG_WAVE_AMPLITUDE_STEPS);
@@ -328,8 +329,8 @@ void handleRoot() {
       "for(const row of data.results){"
       "const li=document.createElement('li');"
       "li.className='row'+(row.place===1?' winner':'');"
-      "li.innerHTML=`<span><span class='place'>#${row.place}</span> <span class='lane'>Lane ${row.lane}</span></span>` +"
-      "(row.place===1?\"<span class='delta'>Winner</span>\":`<span class='delta'>+${row.delta_us} us</span>`);"
+      "li.innerHTML=`<span><span class='place'>#${row.place}</span> <span class='lane'>🏎️ Track ${row.track}</span></span>` +"
+      "(row.place===1?\"<span class='delta'>Winner</span>\":`<span class='delta'>+${row.delta_ms} ms</span>`);"
       "list.appendChild(li);"
       "}"
       "}"
@@ -345,14 +346,16 @@ void handleApiResults() {
 
   for (uint8_t place = 0; place < finishCount; place++) {
     uint8_t lane = finishOrder[place];
-    uint32_t deltaUs = 0;
+    float deltaMs = 0.0f;
     if (place > 0) {
       uint8_t leaderLane = finishOrder[0];
-      deltaUs = laneFinishTimestampUs[lane] - laneFinishTimestampUs[leaderLane];
+      uint32_t deltaUs = laneFinishTimestampUs[lane] - laneFinishTimestampUs[leaderLane];
+      deltaMs = deltaUs / 1000.0f;
     }
 
     if (place > 0) json += ",";
-    json += "{\"place\":" + String(place + 1) + ",\"lane\":" + String(lane + 1) + ",\"delta_us\":" + String(deltaUs) + "}";
+    char trackLabel = 'A' + lane;
+    json += "{\"place\":" + String(place + 1) + ",\"track\":\"" + String(trackLabel) + "\",\"delta_ms\":\"" + String(deltaMs, 3) + "\"}";
   }
 
   json += "]}";

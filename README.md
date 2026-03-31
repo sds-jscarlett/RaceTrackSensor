@@ -197,7 +197,7 @@ The main sketch starts an ESP32 SoftAP for local live results.
 Dashboard features:
 - Auto-refreshes every 500 ms.
 - Shows current race state (`ready`, `running`, `complete`).
-- Displays ordered finish results and microsecond deltas from the leader.
+- Displays ordered finish results and millisecond deltas from the leader.
 - Highlights the winner row with a flashing visual style for quick readability.
 - Includes a **Reset Race** button (web-triggered).
 
@@ -217,7 +217,7 @@ You can change SSID/password in:
    - records winner lane
    - starts winner lane stepper flag oscillation
 6. Next finishes:
-   - records 2nd and 3rd places with microsecond deltas
+   - records 2nd and 3rd places with millisecond deltas shown in UI
 7. Race can be reset in three ways:
    - hardware button press
    - web dashboard reset button
@@ -262,7 +262,8 @@ Open and upload one of:
 Expected behavior:
 - Board creates a Wi-Fi AP and prints dashboard URL in Serial Monitor.
 - Browser dashboard auto-refreshes every 500 ms.
-- Simulated race results rotate automatically every 10 seconds.
+- Press **Reset Race** to start a new simulated race.
+- Simulation walks through states every 5 seconds (`ready` -> `running` -> `complete`).
 
 ---
 
