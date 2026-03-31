@@ -14,6 +14,8 @@ When the first car crosses the finish line, the code identifies the winning lane
 
 - `RaceTrackFinishSystem/RaceTrackFinishSystem.ino`  
   Main race system sketch (3 lanes + interrupt timing + winner flag wave + reset button + Wi-Fi dashboard).
+- `RaceTrackFinishSystem/RaceTrackFinishSystem_ESP-C3-12F-Kit.ino`  
+  Main race system sketch variant for ESP-C3-12F-Kit (3 lanes + interrupt timing + winner flag wave + Wi-Fi dashboard, reset via web/auto).
 - `Sample test for modules/ESP32-S3-WROOM/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`  
   Standalone IR sensor test sketch for ESP32-S3 WROOM.
 - `Sample test for modules/ESP-C3-12F-Kit/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`  
@@ -31,7 +33,7 @@ When the first car crosses the finish line, the code identifies the winning lane
 
 ## 2) Bill of Materials (BOM)
 
-1. ESP32-S3 WROOM development board (USB programmable)
+1. ESP32-S3 WROOM **or** ESP-C3-12F-Kit development board (USB programmable)
 2. 3x IR break-beam emitter/receiver pairs
 3. 3x 28BYJ-48 5V stepper motors
 4. 3x ULN2003 stepper driver boards
@@ -104,6 +106,37 @@ Driver power:
 - ULN2003 GND -> shared GND
 - 28BYJ-48 motor cable -> ULN2003 motor socket
 
+### 3.5 ESP-C3-12F-Kit pin map (main race sketch variant)
+
+For `RaceTrackFinishSystem_ESP-C3-12F-Kit.ino`, use this mapping:
+
+- IR receivers:
+  - Lane 1 IR OUT -> GPIO **0**
+  - Lane 2 IR OUT -> GPIO **1**
+  - Lane 3 IR OUT -> GPIO **2**
+
+- Lane 1 ULN2003:
+  - IN1 -> GPIO **3**
+  - IN2 -> GPIO **4**
+  - IN3 -> GPIO **5**
+  - IN4 -> GPIO **6**
+
+- Lane 2 ULN2003:
+  - IN1 -> GPIO **7**
+  - IN2 -> GPIO **8**
+  - IN3 -> GPIO **9**
+  - IN4 -> GPIO **10**
+
+- Lane 3 ULN2003:
+  - IN1 -> GPIO **18**
+  - IN2 -> GPIO **19**
+  - IN3 -> GPIO **20**
+  - IN4 -> GPIO **21**
+
+Note for ESP-C3 variant:
+- The physical reset button is disabled in this mapping to preserve GPIOs for all 3 stepper lanes.
+- Use the web dashboard reset button or automatic reset timeout.
+
 ---
 
 ## 4) Design Risks / Challenges (and Mitigation)
@@ -168,9 +201,12 @@ Install steps:
 
 1. Connect ESP32-S3 board via USB.
 2. Open Arduino IDE.
-3. Open: `RaceTrackFinishSystem/RaceTrackFinishSystem.ino`
+3. Open one of:
+   - `RaceTrackFinishSystem/RaceTrackFinishSystem.ino` (ESP32-S3)
+   - `RaceTrackFinishSystem/RaceTrackFinishSystem_ESP-C3-12F-Kit.ino` (ESP-C3)
 4. Set board:
-   - **Tools > Board > ESP32 Arduino > ESP32S3 Dev Module** (or exact board variant)
+   - For S3 sketch: **Tools > Board > ESP32 Arduino > ESP32S3 Dev Module**
+   - For C3 sketch: **Tools > Board > ESP32 Arduino > ESP32C3 Dev Module** (or your specific ESP-C3-12F entry)
 5. Set port:
    - **Tools > Port > [your ESP32 COM/tty port]**
 6. (Optional recommended settings)
