@@ -13,10 +13,14 @@ When the first car crosses the finish line, the code identifies the winning lane
 
 - `RaceTrackFinishSystem/RaceTrackFinishSystem.ino`  
   Main race system sketch (3 lanes + finish order + winner flag wave).
-- `Sample test for modules/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`  
-  Standalone IR sensor test sketch.
-- `Sample test for modules/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`  
-  Standalone stepper + ULN2003 test sketch.
+- `Sample test for modules/ESP32-S3-WROOM/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`  
+  Standalone IR sensor test sketch for ESP32-S3 WROOM.
+- `Sample test for modules/ESP-C3-12F-Kit/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`  
+  Standalone IR sensor test sketch for ESP-C3-12F-Kit.
+- `Sample test for modules/ESP32-S3-WROOM/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`  
+  Standalone stepper + ULN2003 test sketch for ESP32-S3 WROOM.
+- `Sample test for modules/ESP-C3-12F-Kit/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`  
+  Standalone stepper + ULN2003 test sketch for ESP-C3-12F-Kit.
 
 ---
 
@@ -196,16 +200,18 @@ Tunables in code:
 Before running full system, test each module independently.
 
 ## 8.1 IR sensor test
-Open and upload:
-- `Sample test for modules/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`
+Open and upload one of:
+- `Sample test for modules/ESP32-S3-WROOM/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`
+- `Sample test for modules/ESP-C3-12F-Kit/IR_BreakBeam_Test/IR_BreakBeam_Test.ino`
 
 Expected Serial output:
 - `BEAM OK` when beam is uninterrupted.
 - `BEAM BROKEN` when object blocks beam.
 
 ## 8.2 Stepper + ULN2003 test
-Open and upload:
-- `Sample test for modules/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`
+Open and upload one of:
+- `Sample test for modules/ESP32-S3-WROOM/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`
+- `Sample test for modules/ESP-C3-12F-Kit/Stepper_28BYJ48_Test/Stepper_28BYJ48_Test.ino`
 
 Expected behavior:
 - Motor sweeps clockwise/counterclockwise continuously.
