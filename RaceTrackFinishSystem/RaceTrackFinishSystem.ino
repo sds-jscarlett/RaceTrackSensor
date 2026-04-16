@@ -59,8 +59,8 @@ const uint8_t L3_IN4 = 21;
 // We use HALF4WIRE mode, so values are often handled as ~4096 micro-steps equivalent.
 // For a visible flag wave, a smaller travel works better.
 const long FLAG_WAVE_AMPLITUDE_STEPS = 450; // adjust mechanically
-const float FLAG_MAX_SPEED = 850.0;         // steps/s
-const float FLAG_ACCEL = 600.0;             // steps/s^2
+const float FLAG_MAX_SPEED = 900.0;         // steps/s (max speed validated in stepper module test)
+const float FLAG_ACCEL = 650.0;             // steps/s^2
 
 // Debounce/lockout for each lane trigger (microseconds)
 const uint32_t TRIGGER_LOCKOUT_US = 300000;
